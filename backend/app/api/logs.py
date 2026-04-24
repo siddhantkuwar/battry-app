@@ -3,33 +3,16 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from ..schemas.log import LogRequest, LogResponse, ParsedTask
+from ..services.battery_service import (
+    calculate_battery_after,
+    get_previous_battery_for_user,
+)
 from ..services.parser_service import normalize_log_text, parse_log_text
 
 
 router = APIRouter(tags=["logs"])
 
 LOGS_DB = []
-DEFAULT_BATTERY = 50
-BATTERY_STEP = 10
-
-
-def get_latest_battery_for_user(user_id: str) -> int:
-    for log in reversed(LOGS_DB):
-        if log["user_id"] == user_id:
-            return log["battery_after"]
-    return DEFAULT_BATTERY
-
-
-def compute_battery_after(battery_before: int, parsed_tasks: list[ParsedTask]) -> int:
-    battery_delta = 0
-
-    for task in parsed_tasks:
-        if task.direction == "up":
-            battery_delta += BATTERY_STEP
-        elif task.direction == "down":
-            battery_delta -= BATTERY_STEP
-
-    return max(0, min(100, battery_before + battery_delta))
 
 
 @router.post("/logs", response_model=LogResponse)
@@ -39,8 +22,8 @@ async def create_log(log_request: LogRequest) -> LogResponse:
         raise HTTPException(status_code=400, detail="Log text cannot be empty.")
 
     parsed_tasks = [ParsedTask(**task) for task in parse_log_text(normalized_text)]
-    battery_before = get_latest_battery_for_user(log_request.user_id)
-    battery_after = compute_battery_after(battery_before, parsed_tasks)
+    battery_before = get_previous_battery_for_user(LOGS_DB, log_request.user_id)
+    battery_after = calculate_battery_after(battery_before, parsed_tasks)
     log_id = str(uuid4())
 
     LOGS_DB.append(
