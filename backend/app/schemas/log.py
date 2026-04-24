@@ -20,3 +20,14 @@ class LogResponse(BaseModel):
     parsed_tasks: list[ParsedTask]
     battery_before: int
     battery_after: int
+
+
+class LogEntry(BaseModel):
+    log_id: str
+    user_id: str
+    text: str
+    normalized_text: str
+    logged_at: datetime
+    parsed_tasks: list[ParsedTask]
+    battery_before: int
+    battery_after: int

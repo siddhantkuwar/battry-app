@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 
-from ..schemas.log import LogRequest, LogResponse, ParsedTask
+from ..schemas.log import LogEntry, LogRequest, LogResponse, ParsedTask
 from ..services.battery_service import (
     calculate_battery_after,
     get_previous_battery_for_user,
@@ -13,6 +13,15 @@ from ..services.parser_service import normalize_log_text, parse_log_text
 router = APIRouter(tags=["logs"])
 
 LOGS_DB = []
+
+
+@router.get("/logs", response_model=list[LogEntry])
+async def get_logs(user_id: str | None = None) -> list[LogEntry]:
+    logs = LOGS_DB
+    if user_id is not None:
+        logs = [log for log in LOGS_DB if log["user_id"] == user_id]
+
+    return [LogEntry(**log) for log in logs]
 
 
 @router.post("/logs", response_model=LogResponse)
