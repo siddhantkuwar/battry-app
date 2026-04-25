@@ -41,6 +41,7 @@ temp/
 node_modules/
 .npm/
 .pnpm-store/
+mobile/.expo/
 dist/
 build/
 .next/
