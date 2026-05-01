@@ -27,6 +27,12 @@ const supabaseKey =
 // Screens use this to show a clear setup message instead of failing silently.
 export const isSupabaseAuthConfigured = Boolean(supabaseUrl && supabaseKey);
 
+// createClient validates its URL immediately during import. When local env vars
+// are missing, use harmless placeholders so the app can boot and show the setup
+// message on AuthScreen instead of crashing on a red runtime error.
+const clientUrl = isSupabaseAuthConfigured ? supabaseUrl : "http://127.0.0.1:54321";
+const clientKey = isSupabaseAuthConfigured ? supabaseKey : "missing-supabase-key";
+
 // Supabase Auth needs a storage adapter. Native apps should not keep tokens in
 // plain AsyncStorage, so iOS/Android use Expo SecureStore instead.
 const nativeSecureStorage = {
@@ -35,7 +41,7 @@ const nativeSecureStorage = {
   setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
 };
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
+export const supabase = createClient(clientUrl, clientKey, {
   auth: {
     // Supabase can refresh the mobile session for us while the app is active.
     autoRefreshToken: true,
