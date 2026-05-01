@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 
 class LogRequest(BaseModel):
-    user_id: str = Field(min_length=1)
     text: str = Field(min_length=1, max_length=500)
     logged_at: datetime
 

@@ -1,5 +1,3 @@
-export const DEMO_USER_ID = "demo-user";
-
 declare const process:
   | {
       env?: {
@@ -21,7 +19,6 @@ export type ParsedTask = {
 };
 
 export type CreateLogRequest = {
-  user_id: string;
   text: string;
   logged_at: string;
 };
@@ -52,6 +49,7 @@ export type WeeklyReport = {
 };
 
 type RequestOptions = {
+  accessToken?: string;
   body?: unknown;
   method?: "GET" | "POST";
   query?: Record<string, string | number | boolean | null | undefined>;
@@ -70,12 +68,18 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+
+  if (options.accessToken) {
+    headers.Authorization = `Bearer ${options.accessToken}`;
+  }
+
   const response = await fetch(buildUrl(path, options.query), {
     body: options.body ? JSON.stringify(options.body) : undefined,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
+    headers,
     method: options.method ?? "GET",
   });
 
@@ -91,25 +95,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return data as T;
 }
 
-export function createLog(payload: CreateLogRequest) {
+export function createLog(payload: CreateLogRequest, accessToken: string) {
   return request<LogResponse>("/logs", {
+    accessToken,
     body: payload,
     method: "POST",
   });
 }
 
-export function getLogs(userId: string) {
+export function getLogs(accessToken: string) {
   return request<LogEntry[]>("/logs", {
-    query: {
-      user_id: userId,
-    },
+    accessToken,
   });
 }
 
-export function getWeeklyReport(userId: string) {
+export function getWeeklyReport(accessToken: string) {
   return request<WeeklyReport>("/report/weekly", {
-    query: {
-      user_id: userId,
-    },
+    accessToken,
   });
 }

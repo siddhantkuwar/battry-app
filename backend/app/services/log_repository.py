@@ -43,72 +43,41 @@ def is_persistent_store_enabled() -> bool:
     return get_database_url() is not None
 
 
-def list_logs(user_id: str | None = None) -> list[dict[str, object]]:
+def list_logs(user_id: str) -> list[dict[str, object]]:
     connection = _get_connection()
     if connection is None:
-        logs = LOGS_DB
-        if user_id is not None:
-            logs = [log for log in LOGS_DB if log["user_id"] == user_id]
-        return logs
+        return [log for log in LOGS_DB if log["user_id"] == user_id]
 
     with connection:
         with connection.cursor() as cursor:
-            if user_id is None:
-                cursor.execute(
-                    """
-                    select
-                        dl.log_id,
-                        dl.user_id,
-                        dl.text,
-                        dl.normalized_text,
-                        dl.logged_at,
-                        coalesce(
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'label', pe.label,
-                                    'direction', pe.direction
-                                )
-                                order by pe.event_order
-                            ) filter (where pe.id is not null),
-                            '[]'::jsonb
-                        ) as parsed_tasks,
-                        dl.battery_before,
-                        dl.battery_after
-                    from daily_logs dl
-                    left join parsed_events pe on pe.log_id = dl.log_id
-                    group by dl.log_id
-                    order by dl.logged_at asc, dl.created_at asc
-                    """
-                )
-            else:
-                cursor.execute(
-                    """
-                    select
-                        dl.log_id,
-                        dl.user_id,
-                        dl.text,
-                        dl.normalized_text,
-                        dl.logged_at,
-                        coalesce(
-                            jsonb_agg(
-                                jsonb_build_object(
-                                    'label', pe.label,
-                                    'direction', pe.direction
-                                )
-                                order by pe.event_order
-                            ) filter (where pe.id is not null),
-                            '[]'::jsonb
-                        ) as parsed_tasks,
-                        dl.battery_before,
-                        dl.battery_after
-                    from daily_logs dl
-                    left join parsed_events pe on pe.log_id = dl.log_id
-                    where dl.user_id = %s
-                    group by dl.log_id
-                    order by dl.logged_at asc, dl.created_at asc
-                    """,
-                    (user_id,),
-                )
+            cursor.execute(
+                """
+                select
+                    dl.log_id,
+                    dl.user_id,
+                    dl.text,
+                    dl.normalized_text,
+                    dl.logged_at,
+                    coalesce(
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'label', pe.label,
+                                'direction', pe.direction
+                            )
+                            order by pe.event_order
+                        ) filter (where pe.id is not null),
+                        '[]'::jsonb
+                    ) as parsed_tasks,
+                    dl.battery_before,
+                    dl.battery_after
+                from daily_logs dl
+                left join parsed_events pe on pe.log_id = dl.log_id
+                where dl.user_id = %s
+                group by dl.log_id
+                order by dl.logged_at asc, dl.created_at asc
+                """,
+                (user_id,),
+            )
 
             return [_serialize_log_row(row) for row in cursor.fetchall()]
 

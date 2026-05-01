@@ -18,7 +18,8 @@ It's not tryna to be a journal, habit tracker, or therapy tool. Right now it is 
 - Calculate `battery_before` and `battery_after`.
 - Keep logs in memory when no database is configured.
 - Store logs and parsed events in Supabase Postgres when `SUPABASE_DATABASE_URL` is set.
-- Fetch recent logs for a user.
+- Sign in and sign up with Supabase Auth.
+- Fetch recent logs for the signed-in user.
 - Build a basic weekly report with average/min/max battery, top drainer, top recharger, and a simple risk label.
 
 ## Current Stack
@@ -67,9 +68,9 @@ Create a log:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/logs \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-    "user_id": "demo-user",
     "text": "bad sleep and small talk",
     "logged_at": "2026-04-27T09:00:00Z"
   }'
@@ -78,13 +79,15 @@ curl -X POST http://127.0.0.1:8000/logs \
 List logs:
 
 ```bash
-curl 'http://127.0.0.1:8000/logs?user_id=demo-user'
+curl -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  'http://127.0.0.1:8000/logs'
 ```
 
 Get the weekly report:
 
 ```bash
-curl 'http://127.0.0.1:8000/report/weekly?user_id=demo-user'
+curl -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  'http://127.0.0.1:8000/report/weekly'
 ```
 
 ## Database Mode
@@ -112,7 +115,7 @@ Run the SQL migration in:
 supabase/migrations/202604260001_initial_battry_schema.sql
 ```
 
-Auth is not wired yet. The app currently uses `demo-user`, and user isolation is handled by backend filtering. That is fine for this stage, but it is not the final security model.
+Auth is wired through Supabase. The mobile app signs requests with a bearer token, and the backend derives the user from that token.
 
 ## Mobile Setup
 
@@ -121,6 +124,7 @@ Install the mobile dependencies:
 ```bash
 cd mobile
 npm install
+cp .env.example .env
 ```
 
 Run Expo:
@@ -153,9 +157,7 @@ This is still pretty early and plain
 
 What needs to be done:
 
-- real auth
-- proper user accounts
-- production-grade RLS flow
+- production-grade RLS policies
 - vector parsing
 - ML forecasting
 - polished charts

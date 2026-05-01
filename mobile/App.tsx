@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AppState,
   SafeAreaView,
   StatusBar,
   StyleSheet,
@@ -7,9 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import type { Session } from "@supabase/supabase-js";
 
-import { DEMO_USER_ID, createLog, getLogs, getWeeklyReport } from "./src/api/client";
+import { createLog, getLogs, getWeeklyReport } from "./src/api/client";
 import type { LogEntry, LogResponse, WeeklyReport } from "./src/api/client";
+import { supabase } from "./src/auth/supabase";
+import { AuthScreen } from "./src/screens/AuthScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LogScreen } from "./src/screens/LogScreen";
 import { ReportScreen } from "./src/screens/ReportScreen";
@@ -23,6 +27,8 @@ const tabs: Array<{ key: ScreenName; label: string }> = [
 ];
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [activeScreen, setActiveScreen] = useState<ScreenName>("home");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
@@ -42,14 +48,49 @@ export default function App() {
     return weeklyReport?.average_battery ?? 50;
   }, [lastLogResult, logs, weeklyReport]);
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setIsAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (!nextSession) {
+        setLogs([]);
+        setWeeklyReport(null);
+        setLastLogResult(null);
+      }
+    });
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      appStateSubscription.remove();
+    };
+  }, []);
+
   const refreshData = useCallback(async () => {
+    if (!session?.access_token) {
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
       const [nextLogs, nextReport] = await Promise.all([
-        getLogs(DEMO_USER_ID),
-        getWeeklyReport(DEMO_USER_ID),
+        getLogs(session.access_token),
+        getWeeklyReport(session.access_token),
       ]);
 
       setLogs(nextLogs);
@@ -59,22 +100,31 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session?.access_token]);
 
   useEffect(() => {
-    void refreshData();
-  }, [refreshData]);
+    if (session?.access_token) {
+      void refreshData();
+    }
+  }, [refreshData, session?.access_token]);
 
   const handleSubmitLog = async (text: string) => {
+    if (!session?.access_token) {
+      setErrorMessage("Sign in before submitting a log.");
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      const result = await createLog({
-        user_id: DEMO_USER_ID,
-        text,
-        logged_at: new Date().toISOString(),
-      });
+      const result = await createLog(
+        {
+          text,
+          logged_at: new Date().toISOString(),
+        },
+        session.access_token,
+      );
 
       setLastLogResult(result);
       await refreshData();
@@ -86,13 +136,33 @@ export default function App() {
     }
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (isAuthLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingShell}>
+          <Text style={styles.loadingText}>Loading Battry</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!session) {
+    return <AuthScreen />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.shell}>
         <View style={styles.header}>
           <Text style={styles.appName}>Battry</Text>
-          <Text style={styles.userLabel}>{DEMO_USER_ID}</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={handleSignOut}>
+            <Text style={styles.userLabel}>{session.user.email ?? "Sign out"}</Text>
+          </TouchableOpacity>
         </View>
 
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
@@ -155,6 +225,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 12,
+  },
+  loadingShell: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+  },
+  loadingText: {
+    color: "#151515",
+    fontSize: 18,
+    fontWeight: "800",
   },
   header: {
     alignItems: "center",
