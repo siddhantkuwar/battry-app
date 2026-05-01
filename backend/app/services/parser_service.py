@@ -1,6 +1,8 @@
 import re
 
 
+# These rules are intentionally simple for now. A future ML/vector parser can
+# replace this list while keeping parse_log_text's return shape the same.
 TASK_RULES = [
     {
         "label": "bad_sleep",
@@ -31,6 +33,7 @@ TASK_RULES = [
 
 
 def normalize_log_text(text: str) -> str:
+    """Make raw user text predictable before parsing or storing it."""
     normalized = text.strip().lower()
     normalized = re.sub(r"[\x00-\x1f\x7f]", " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
@@ -38,6 +41,11 @@ def normalize_log_text(text: str) -> str:
 
 
 def parse_log_text(text: str) -> list[dict[str, str]]:
+    """Convert free text into recognized energy events.
+
+    The parser adds each label at most once per log. That keeps one repeated
+    phrase from multiplying the battery score unexpectedly.
+    """
     normalized = normalize_log_text(text)
     parsed_tasks = []
     seen_labels = set()

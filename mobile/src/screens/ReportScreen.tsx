@@ -10,6 +10,8 @@ type ReportScreenProps = {
 };
 
 export function ReportScreen({ isLoading, logs, report, onRefresh }: ReportScreenProps) {
+  // The report is aggregate data from the backend; logs are still passed in so
+  // the same screen can show the raw timeline under the summary.
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <View style={styles.row}>
@@ -72,6 +74,7 @@ export function ReportScreen({ isLoading, logs, report, onRefresh }: ReportScree
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  // Small repeated card used by the weekly report's four headline numbers.
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>

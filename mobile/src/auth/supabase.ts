@@ -24,8 +24,11 @@ const supabaseKey =
       ""
     : "";
 
+// Screens use this to show a clear setup message instead of failing silently.
 export const isSupabaseAuthConfigured = Boolean(supabaseUrl && supabaseKey);
 
+// Supabase Auth needs a storage adapter. Native apps should not keep tokens in
+// plain AsyncStorage, so iOS/Android use Expo SecureStore instead.
 const nativeSecureStorage = {
   getItem: (key: string) => SecureStore.getItemAsync(key),
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
@@ -34,9 +37,12 @@ const nativeSecureStorage = {
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
+    // Supabase can refresh the mobile session for us while the app is active.
     autoRefreshToken: true,
+    // React Native does not complete auth through browser URL callbacks here.
     detectSessionInUrl: false,
     persistSession: true,
+    // Web builds cannot use SecureStore, so they fall back to AsyncStorage.
     storage: Platform.OS === "web" ? AsyncStorage : nativeSecureStorage,
   },
 });

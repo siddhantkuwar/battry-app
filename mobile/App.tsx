@@ -18,13 +18,50 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { LogScreen } from "./src/screens/LogScreen";
 import { ReportScreen } from "./src/screens/ReportScreen";
 
+const DEFAULT_BATTERY = 50;
+
 type ScreenName = "home" | "log" | "report";
 
-const tabs: Array<{ key: ScreenName; label: string }> = [
+type TabDefinition = {
+  key: ScreenName;
+  label: string;
+};
+
+// The app uses a tiny hand-rolled tab switcher for now. Keeping tab metadata in
+// one list prevents the tab bar and screen names from drifting apart.
+const tabs: TabDefinition[] = [
   { key: "home", label: "Home" },
   { key: "log", label: "Log" },
   { key: "report", label: "Report" },
 ];
+
+function getReadableErrorMessage(error: unknown, fallback: string) {
+  // Fetch and Supabase errors normally arrive as Error objects. The fallback
+  // covers unexpected values without crashing the UI.
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getCurrentBattery({
+  lastLogResult,
+  logs,
+  weeklyReport,
+}: {
+  lastLogResult: LogResponse | null;
+  logs: LogEntry[];
+  weeklyReport: WeeklyReport | null;
+}) {
+  // The freshest exact score is the newest saved log. Immediately after submit,
+  // lastLogResult lets the UI update before the refresh request finishes.
+  if (logs.length > 0) {
+    return logs[logs.length - 1].battery_after;
+  }
+
+  if (lastLogResult) {
+    return lastLogResult.battery_after;
+  }
+
+  return weeklyReport?.average_battery ?? DEFAULT_BATTERY;
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -36,35 +73,33 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const currentBattery = useMemo(() => {
-    if (logs.length > 0) {
-      return logs[logs.length - 1].battery_after;
-    }
-
-    if (lastLogResult) {
-      return lastLogResult.battery_after;
-    }
-
-    return weeklyReport?.average_battery ?? 50;
-  }, [lastLogResult, logs, weeklyReport]);
+  const currentBattery = useMemo(
+    () => getCurrentBattery({ lastLogResult, logs, weeklyReport }),
+    [lastLogResult, logs, weeklyReport],
+  );
 
   useEffect(() => {
+    // On app launch, ask Supabase whether a previous session was saved.
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setIsAuthLoading(false);
     });
 
+    // Supabase emits auth changes for sign in, sign up, refresh, and sign out.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (!nextSession) {
+        // Clear user-specific data immediately when the user signs out.
         setLogs([]);
         setWeeklyReport(null);
         setLastLogResult(null);
       }
     });
 
+    // Mobile apps can be backgrounded for a long time. Starting/stopping token
+    // refresh with app state avoids unnecessary refresh work in the background.
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         supabase.auth.startAutoRefresh();
@@ -84,6 +119,8 @@ export default function App() {
       return;
     }
 
+    // One refresh updates both the timeline and the weekly report so screens
+    // stay consistent after a submit or manual refresh.
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -96,13 +133,14 @@ export default function App() {
       setLogs(nextLogs);
       setWeeklyReport(nextReport);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to load Battry data.");
+      setErrorMessage(getReadableErrorMessage(error, "Unable to load Battry data."));
     } finally {
       setIsLoading(false);
     }
   }, [session?.access_token]);
 
   useEffect(() => {
+    // Load data as soon as a valid session appears.
     if (session?.access_token) {
       void refreshData();
     }
@@ -130,13 +168,14 @@ export default function App() {
       await refreshData();
       setActiveScreen("home");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to submit log.");
+      setErrorMessage(getReadableErrorMessage(error, "Unable to submit log."));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSignOut = async () => {
+    // Supabase will trigger onAuthStateChange, which clears app state above.
     await supabase.auth.signOut();
   };
 

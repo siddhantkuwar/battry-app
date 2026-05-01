@@ -12,6 +12,12 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class AuthenticatedUser(BaseModel):
+    """The small user object the rest of the API is allowed to trust.
+
+    We only expose fields that came back from Supabase after token validation.
+    Routes should use this instead of accepting a user id from the client.
+    """
+
     id: str
     email: str | None = None
 
@@ -19,6 +25,12 @@ class AuthenticatedUser(BaseModel):
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> AuthenticatedUser:
+    """Validate the request's bearer token with Supabase Auth.
+
+    FastAPI runs this as a dependency before protected routes. If anything is
+    missing, expired, or misconfigured, it raises an HTTP error and the route
+    handler never receives control.
+    """
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,6 +46,8 @@ async def get_current_user(
             detail="Auth is not configured.",
         )
 
+    # Supabase exposes the current user at /auth/v1/user when we pass the
+    # mobile app's access token in the Authorization header.
     auth_url = f"{supabase_url.rstrip('/')}/auth/v1/user"
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -57,6 +71,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # We only trust the request after Supabase returns a concrete user id.
     user_data = response.json()
     user_id = user_data.get("id")
     if not isinstance(user_id, str) or not user_id:

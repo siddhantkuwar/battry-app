@@ -10,6 +10,8 @@ from .api.reports import router as reports_router
 
 app = FastAPI(title="Battry API v2")
 
+# The mobile app can run from a few different local Expo hosts. Keeping these
+# values env-driven lets production tighten CORS without code changes.
 cors_origins = [
     origin.strip()
     for origin in os.getenv(
@@ -27,6 +29,8 @@ app.add_middleware(
     allow_origins=cors_origins,
 )
 
+# Routers keep endpoint files small: health is public, while logs/reports add
+# their own auth dependencies before touching user data.
 app.include_router(health_router, prefix="/api")
 app.include_router(logs_router)
 app.include_router(reports_router)

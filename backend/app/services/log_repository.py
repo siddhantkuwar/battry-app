@@ -9,10 +9,18 @@ from ..schemas.log import ParsedTask
 from .battery_service import get_task_weight
 
 
+# In-memory storage keeps local development working before Postgres is set up.
+# It resets whenever the API process restarts and should not be treated as
+# production storage.
 LOGS_DB: list[dict[str, object]] = []
 
 
 def _get_connection():
+    """Open a Postgres connection when database mode is configured.
+
+    Returning None is the signal for callers to use the in-memory fallback.
+    Importing psycopg inside the function keeps no-database local runs lighter.
+    """
     database_url = get_database_url()
     if database_url is None:
         return None
@@ -23,6 +31,7 @@ def _get_connection():
 
 
 def _serialize_log_row(row: Mapping[str, object]) -> dict[str, object]:
+    """Turn a SQL row into the same dictionary shape as the in-memory store."""
     parsed_tasks = row.get("parsed_tasks")
     if parsed_tasks is None:
         parsed_tasks = []
@@ -40,16 +49,21 @@ def _serialize_log_row(row: Mapping[str, object]) -> dict[str, object]:
 
 
 def is_persistent_store_enabled() -> bool:
+    """Tell route code whether log writes will go to Postgres."""
     return get_database_url() is not None
 
 
 def list_logs(user_id: str) -> list[dict[str, object]]:
+    """Return all logs for a user from the active storage backend."""
     connection = _get_connection()
     if connection is None:
         return [log for log in LOGS_DB if log["user_id"] == user_id]
 
     with connection:
         with connection.cursor() as cursor:
+            # The JSON aggregation rebuilds the parsed_tasks list that the API
+            # already returns in memory mode, so callers do not care where the
+            # data came from.
             cursor.execute(
                 """
                 select
@@ -83,6 +97,7 @@ def list_logs(user_id: str) -> list[dict[str, object]]:
 
 
 def get_latest_battery_for_user(user_id: str) -> int | None:
+    """Fetch the user's newest stored battery score, if one exists."""
     connection = _get_connection()
     if connection is None:
         for log in reversed(LOGS_DB):
@@ -120,6 +135,7 @@ def create_log(
     battery_before: int,
     battery_after: int,
 ) -> dict[str, object]:
+    """Persist a parsed log and return it in API-friendly dictionary form."""
     log_id = str(uuid4())
     task_payload = [task.model_dump() for task in parsed_tasks]
 
@@ -140,6 +156,8 @@ def create_log(
 
     with connection:
         with connection.cursor() as cursor:
+            # app_users is a lightweight mirror of Supabase user ids so foreign
+            # keys can protect daily_logs and parsed_events.
             cursor.execute(
                 """
                 insert into app_users (id)
@@ -148,6 +166,8 @@ def create_log(
                 """,
                 (user_id,),
             )
+            # Store the original text for display and the normalized text for
+            # future parser/debug work.
             cursor.execute(
                 """
                 insert into daily_logs (
@@ -172,6 +192,8 @@ def create_log(
                     battery_after,
                 ),
             )
+            # Each parsed event gets its own row so later reports can ask
+            # database-level questions about labels and weights.
             cursor.executemany(
                 """
                 insert into parsed_events (

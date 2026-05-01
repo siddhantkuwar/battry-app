@@ -15,5 +15,6 @@ router = APIRouter(tags=["reports"])
 async def get_weekly_report(
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> WeeklyReportResponse:
+    """Build the weekly report for the signed-in user."""
     user_logs = list_logs(current_user.id)
     return WeeklyReportResponse(**build_weekly_report(user_logs, current_user.id))

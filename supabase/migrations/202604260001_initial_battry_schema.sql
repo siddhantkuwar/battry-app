@@ -1,10 +1,14 @@
 create extension if not exists pgcrypto;
 
+-- Supabase Auth owns the real users. This table mirrors only the auth user id
+-- so app-owned tables can use normal foreign keys.
 create table if not exists app_users (
   id text primary key,
   created_at timestamptz not null default now()
 );
 
+-- One row per submitted daily log. The raw text is for display; normalized_text
+-- is the cleaned parser input and is useful for debugging future parser changes.
 create table if not exists daily_logs (
   log_id uuid primary key default gen_random_uuid(),
   user_id text not null references app_users(id) on delete cascade,
@@ -20,6 +24,8 @@ create table if not exists daily_logs (
   constraint daily_logs_battery_after_range check (battery_after between 0 and 100)
 );
 
+-- One row per parsed energy event. Keeping events separate from daily_logs makes
+-- future reporting and analytics much easier than searching JSON blobs.
 create table if not exists parsed_events (
   id bigint generated always as identity primary key,
   log_id uuid not null references daily_logs(log_id) on delete cascade,
@@ -37,6 +43,8 @@ create table if not exists parsed_events (
 create index if not exists daily_logs_user_logged_at_idx
   on daily_logs (user_id, logged_at desc, created_at desc);
 
+-- These indexes match the two common reads: events for one log and event labels
+-- for one user.
 create index if not exists parsed_events_log_id_idx
   on parsed_events (log_id);
 

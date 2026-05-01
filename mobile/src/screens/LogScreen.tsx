@@ -18,11 +18,14 @@ type LogScreenProps = {
 };
 
 export function LogScreen({ isSubmitting, lastLogResult, onSubmit }: LogScreenProps) {
+  // The starter text makes local demo/testing faster. Real user text replaces
+  // it as soon as they type.
   const [text, setText] = useState("bad sleep and small talk");
 
   const canSubmit = text.trim().length > 0 && !isSubmitting;
 
   const handleSubmit = async () => {
+    // Trim before sending so the backend does not receive accidental spacing.
     if (!canSubmit) {
       return;
     }

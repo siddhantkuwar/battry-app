@@ -26,6 +26,7 @@ router = APIRouter(tags=["logs"])
 async def get_logs(
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> list[LogEntry]:
+    """List the signed-in user's logs in the API response shape."""
     return [LogEntry(**log) for log in list_logs(current_user.id)]
 
 
@@ -34,11 +35,24 @@ async def create_log(
     log_request: LogRequest,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> LogResponse:
+    """Create one daily log and return the battery change it caused.
+
+    Flow in plain English:
+    1. Clean the user's raw text.
+    2. Parse known energy events out of that text.
+    3. Start from the user's previous battery score.
+    4. Save the log.
+    5. Return only the fields the mobile submit screen needs immediately.
+    """
     normalized_text = normalize_log_text(log_request.text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="Log text cannot be empty.")
 
     parsed_tasks = [ParsedTask(**task) for task in parse_log_text(normalized_text)]
+
+    # The database path asks Postgres for the latest score. The fallback path
+    # uses the in-memory list so the app still works before infrastructure is
+    # configured.
     if is_persistent_store_enabled():
         battery_before = get_latest_battery_for_user(current_user.id) or DEFAULT_BATTERY
     else:

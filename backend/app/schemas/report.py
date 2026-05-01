@@ -2,6 +2,8 @@ from pydantic import BaseModel
 
 
 class WeeklyReportResponse(BaseModel):
+    """Summary numbers shown on the mobile report screen."""
+
     user_id: str
     log_count: int
     average_battery: float

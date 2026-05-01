@@ -9,6 +9,7 @@ def get_logs_for_user(
     logs: Iterable[Mapping[str, object]],
     user_id: str,
 ) -> list[Mapping[str, object]]:
+    """Keep only logs that belong to the requested user."""
     return [log for log in logs if log.get("user_id") == user_id]
 
 
@@ -16,6 +17,11 @@ def get_weekly_logs(
     logs: Iterable[Mapping[str, object]],
     user_id: str,
 ) -> list[Mapping[str, object]]:
+    """Select the last seven days of logs relative to the user's newest log.
+
+    This intentionally uses the latest log as the anchor instead of today's
+    date so sample data and manual tests keep producing useful reports.
+    """
     user_logs = get_logs_for_user(logs, user_id)
     dated_logs = [log for log in user_logs if log.get("logged_at") is not None]
     if not dated_logs:
@@ -32,6 +38,7 @@ def get_weekly_logs(
 
 
 def calculate_battery_stats(logs: Iterable[Mapping[str, object]]) -> dict[str, float | int]:
+    """Calculate average, minimum, and maximum battery scores for a log set."""
     battery_scores = [
         log["battery_after"]
         for log in logs
@@ -55,6 +62,7 @@ def calculate_battery_stats(logs: Iterable[Mapping[str, object]]) -> dict[str, f
 def find_top_energy_events(
     logs: Iterable[Mapping[str, object]],
 ) -> tuple[str | None, str | None]:
+    """Find the strongest repeated drainer and recharger labels."""
     drainer_scores: dict[str, int] = defaultdict(int)
     recharger_scores: dict[str, int] = defaultdict(int)
 
@@ -85,6 +93,7 @@ def find_top_energy_events(
 
 
 def calculate_risk(average_battery: float, min_battery: int) -> str:
+    """Convert report numbers into a simple risk label for the UI."""
     if min_battery <= 20 or average_battery < 35:
         return "high"
     if min_battery <= 40 or average_battery < 55:
@@ -96,6 +105,7 @@ def build_weekly_report(
     logs: Iterable[Mapping[str, object]],
     user_id: str,
 ) -> dict[str, object]:
+    """Build the complete weekly report response for one user."""
     weekly_logs = get_weekly_logs(logs, user_id)
     stats = calculate_battery_stats(weekly_logs)
     top_drainer, top_recharger = find_top_energy_events(weekly_logs)

@@ -8,6 +8,8 @@ declare const process:
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
+// Expo exposes EXPO_PUBLIC_* env vars at build time. The fallback keeps the
+// app usable with a local Uvicorn server before env files are configured.
 export const API_BASE_URL =
   typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL
     ? process.env.EXPO_PUBLIC_API_URL
@@ -56,6 +58,7 @@ type RequestOptions = {
 };
 
 function buildUrl(path: string, query?: RequestOptions["query"]) {
+  // URL handles slash joining and query escaping more safely than string concat.
   const url = new URL(path, API_BASE_URL);
 
   Object.entries(query ?? {}).forEach(([key, value]) => {
@@ -68,6 +71,8 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  // Every backend route currently speaks JSON. Authorization is added only
+  // after the user is signed in and Supabase gives us an access token.
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -83,10 +88,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     method: options.method ?? "GET",
   });
 
+  // Reading text first lets us handle both JSON responses and empty responses.
   const responseText = await response.text();
   const data = responseText ? JSON.parse(responseText) : null;
 
   if (!response.ok) {
+    // FastAPI error responses usually look like { detail: "message" }. Showing
+    // that detail in the app makes debugging failed requests much easier.
     const detail =
       data && typeof data === "object" && "detail" in data ? String(data.detail) : null;
     throw new Error(detail ?? `Request failed with status ${response.status}`);
@@ -96,6 +104,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export function createLog(payload: CreateLogRequest, accessToken: string) {
+  // Submit one free-text log. The backend parses it and returns the score delta.
   return request<LogResponse>("/logs", {
     accessToken,
     body: payload,
@@ -104,12 +113,14 @@ export function createLog(payload: CreateLogRequest, accessToken: string) {
 }
 
 export function getLogs(accessToken: string) {
+  // Load the signed-in user's history for the home and report screens.
   return request<LogEntry[]>("/logs", {
     accessToken,
   });
 }
 
 export function getWeeklyReport(accessToken: string) {
+  // Load aggregate stats calculated by the backend from the user's logs.
   return request<WeeklyReport>("/report/weekly", {
     accessToken,
   });

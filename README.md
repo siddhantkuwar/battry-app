@@ -29,6 +29,21 @@ It's not tryna to be a journal, habit tracker, or therapy tool. Right now it is 
 - Persistence: in-memory fallback or Supabase Postgres
 - Local server: Uvicorn
 
+## Code Map
+
+- `backend/app/main.py` creates the FastAPI app, configures CORS, and mounts routes.
+- `backend/app/api/` contains HTTP route handlers. These should stay thin.
+- `backend/app/core/` contains cross-cutting setup like env config and auth.
+- `backend/app/schemas/` contains Pydantic request/response models.
+- `backend/app/services/parser_service.py` turns log text into labels.
+- `backend/app/services/battery_service.py` turns labels into battery scores.
+- `backend/app/services/log_repository.py` hides the in-memory vs Postgres storage choice.
+- `backend/app/services/report_service.py` calculates weekly report data.
+- `mobile/App.tsx` owns auth state, loaded data, screen switching, and submit/refresh flows.
+- `mobile/src/api/client.ts` is the only mobile file that should call the backend directly.
+- `mobile/src/auth/supabase.ts` creates the Supabase mobile auth client.
+- `mobile/src/screens/` contains presentational screens that receive data and callbacks.
+
 ## Backend Setup
 
 Create a virtualenv:

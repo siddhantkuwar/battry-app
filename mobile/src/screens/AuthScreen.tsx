@@ -12,6 +12,8 @@ import {
 import { isSupabaseAuthConfigured, supabase } from "../auth/supabase";
 
 export function AuthScreen() {
+  // Local form state lives here because this screen is only shown before a
+  // session exists. Once Supabase signs in, App.tsx takes over.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +23,8 @@ export function AuthScreen() {
     isSupabaseAuthConfigured && email.trim().length > 0 && password.length >= 6 && !isLoading;
 
   const handleSignIn = async () => {
+    // Guarding here as well as disabling the button prevents accidental double
+    // submits from fast taps or keyboard submit events.
     if (!canSubmit) {
       return;
     }
@@ -39,6 +43,8 @@ export function AuthScreen() {
   };
 
   const handleSignUp = async () => {
+    // Sign up uses the same email/password inputs but may require email
+    // confirmation depending on the Supabase project settings.
     if (!canSubmit) {
       return;
     }

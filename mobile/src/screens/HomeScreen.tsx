@@ -11,6 +11,12 @@ type HomeScreenProps = {
   onRefresh: () => void;
 };
 
+function clampBatteryPercent(value: number) {
+  // The backend should already return 0-100, but clamping protects the progress
+  // bar layout if old data or a future bug sends an out-of-range value.
+  return Math.max(0, Math.min(100, value));
+}
+
 export function HomeScreen({
   currentBattery,
   isLoading,
@@ -19,13 +25,18 @@ export function HomeScreen({
   weeklyReport,
   onRefresh,
 }: HomeScreenProps) {
+  const batteryFillWidth = `${clampBatteryPercent(currentBattery)}%` as `${number}%`;
+  // A log can submit without matching parser rules, so show a plain empty state.
+  const latestTaskLabels =
+    lastLogResult?.parsed_tasks.map((task) => task.label).join(", ") || "No labels found";
+
   return (
     <View style={styles.screen}>
       <View style={styles.batteryPanel}>
         <Text style={styles.label}>Current battery</Text>
         <Text style={styles.batteryValue}>{Math.round(currentBattery)}%</Text>
         <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.max(0, Math.min(100, currentBattery))}%` }]} />
+          <View style={[styles.fill, { width: batteryFillWidth }]} />
         </View>
         <Text style={styles.risk}>Risk: {weeklyReport?.risk ?? "not enough data"}</Text>
       </View>
@@ -36,9 +47,7 @@ export function HomeScreen({
           <Text style={styles.change}>
             {lastLogResult.battery_before}% to {lastLogResult.battery_after}%
           </Text>
-          <Text style={styles.muted}>
-            {lastLogResult.parsed_tasks.map((task) => task.label).join(", ") || "No labels found"}
-          </Text>
+          <Text style={styles.muted}>{latestTaskLabels}</Text>
         </View>
       ) : null}
 
