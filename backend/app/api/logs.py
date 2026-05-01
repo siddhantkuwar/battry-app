@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..core.auth import AuthenticatedUser, get_current_user
+from ..core.rate_limit import check_log_submission_rate_limit
 from ..schemas.log import LogEntry, LogRequest, LogResponse, ParsedTask
 from ..services.battery_service import (
     DEFAULT_BATTERY,
@@ -38,12 +39,21 @@ async def create_log(
     """Create one daily log and return the battery change it caused.
 
     Flow in plain English:
+    0. Rate-limit the anonymous device.
     1. Clean the user's raw text.
     2. Parse known energy events out of that text.
     3. Start from the user's previous battery score.
     4. Save the log.
     5. Return only the fields the mobile submit screen needs immediately.
     """
+    rate_limit = check_log_submission_rate_limit(current_user.id)
+    if not rate_limit.is_allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many logs submitted. Try again soon.",
+            headers={"Retry-After": str(rate_limit.retry_after_seconds)},
+        )
+
     normalized_text = normalize_log_text(log_request.text)
     if not normalized_text:
         raise HTTPException(status_code=400, detail="Log text cannot be empty.")

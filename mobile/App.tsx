@@ -12,7 +12,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { createLog, getLogs, getWeeklyReport } from "./src/api/client";
 import type { LogEntry, LogResponse, WeeklyReport } from "./src/api/client";
-import { supabase } from "./src/auth/supabase";
+import { isSupabaseAuthConfigured, supabase } from "./src/auth/supabase";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LogScreen } from "./src/screens/LogScreen";
@@ -66,6 +66,7 @@ function getCurrentBattery({
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [activeScreen, setActiveScreen] = useState<ScreenName>("home");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
@@ -79,13 +80,67 @@ export default function App() {
   );
 
   useEffect(() => {
-    // On app launch, ask Supabase whether a previous session was saved.
-    supabase.auth.getSession().then(({ data }) => {
+    let isMounted = true;
+
+    async function createAnonymousSession() {
+      if (!isSupabaseAuthConfigured) {
+        setAuthErrorMessage("Supabase auth env vars are missing.");
+        setIsAuthLoading(false);
+        return;
+      }
+
+      setAuthErrorMessage(null);
+
+      // Battry is privacy-first: the user never enters an email/password. The
+      // device asks Supabase for an anonymous user, and Supabase returns a
+      // random UUID plus bearer token that the backend can verify.
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        setAuthErrorMessage(error.message);
+        setIsAuthLoading(false);
+        return;
+      }
+
       setSession(data.session);
       setIsAuthLoading(false);
-    });
+    }
 
-    // Supabase emits auth changes for sign in, sign up, refresh, and sign out.
+    async function loadOrCreateSession() {
+      if (!isSupabaseAuthConfigured) {
+        setAuthErrorMessage("Supabase auth env vars are missing.");
+        setIsAuthLoading(false);
+        return;
+      }
+
+      // On app launch, ask Supabase whether this device already has a saved
+      // anonymous session. If not, create one automatically.
+      const { data, error } = await supabase.auth.getSession();
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        setAuthErrorMessage(error.message);
+        setIsAuthLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        setIsAuthLoading(false);
+        return;
+      }
+
+      await createAnonymousSession();
+    }
+
+    void loadOrCreateSession();
+
+    // Supabase emits auth changes for anonymous sign-in, refresh, and sign-out.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -109,6 +164,7 @@ export default function App() {
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
       appStateSubscription.remove();
     };
@@ -148,7 +204,7 @@ export default function App() {
 
   const handleSubmitLog = async (text: string) => {
     if (!session?.access_token) {
-      setErrorMessage("Sign in before submitting a log.");
+      setErrorMessage("Private device session is not ready yet.");
       return;
     }
 
@@ -174,23 +230,41 @@ export default function App() {
     }
   };
 
-  const handleSignOut = async () => {
-    // Supabase will trigger onAuthStateChange, which clears app state above.
-    await supabase.auth.signOut();
-  };
-
   if (isAuthLoading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingShell}>
-          <Text style={styles.loadingText}>Loading Battry</Text>
+          <Text style={styles.loadingText}>Starting private session</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   if (!session) {
-    return <AuthScreen />;
+    return (
+      <AuthScreen
+        errorMessage={authErrorMessage}
+        isSupabaseConfigured={isSupabaseAuthConfigured}
+        onRetry={() => {
+          if (!isSupabaseAuthConfigured) {
+            return;
+          }
+
+          setIsAuthLoading(true);
+          setAuthErrorMessage(null);
+          supabase.auth.signInAnonymously().then(({ data, error }) => {
+            if (error) {
+              setAuthErrorMessage(error.message);
+              setIsAuthLoading(false);
+              return;
+            }
+
+            setSession(data.session);
+            setIsAuthLoading(false);
+          });
+        }}
+      />
+    );
   }
 
   return (
@@ -199,9 +273,7 @@ export default function App() {
       <View style={styles.shell}>
         <View style={styles.header}>
           <Text style={styles.appName}>Battry</Text>
-          <TouchableOpacity accessibilityRole="button" onPress={handleSignOut}>
-            <Text style={styles.userLabel}>{session.user.email ?? "Sign out"}</Text>
-          </TouchableOpacity>
+          <Text style={styles.userLabel}>Private device</Text>
         </View>
 
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}

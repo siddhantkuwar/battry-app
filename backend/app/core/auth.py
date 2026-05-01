@@ -19,7 +19,7 @@ class AuthenticatedUser(BaseModel):
     """
 
     id: str
-    email: str | None = None
+    is_anonymous: bool
 
 
 async def get_current_user(
@@ -81,8 +81,16 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    email = user_data.get("email")
+    # Battry is privacy-first right now. We only accept Supabase anonymous
+    # device users, not permanent email/OAuth users.
+    is_anonymous = user_data.get("is_anonymous")
+    if is_anonymous is not True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Battry only accepts anonymous device sessions.",
+        )
+
     return AuthenticatedUser(
         id=user_id,
-        email=email if isinstance(email, str) else None,
+        is_anonymous=True,
     )

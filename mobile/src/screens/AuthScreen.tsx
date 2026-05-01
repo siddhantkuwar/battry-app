@@ -1,127 +1,37 @@
-import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import { isSupabaseAuthConfigured, supabase } from "../auth/supabase";
+type AuthScreenProps = {
+  errorMessage: string | null;
+  isSupabaseConfigured: boolean;
+  onRetry: () => void;
+};
 
-export function AuthScreen() {
-  // Local form state lives here because this screen is only shown before a
-  // session exists. Once Supabase signs in, App.tsx takes over.
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const canSubmit =
-    isSupabaseAuthConfigured && email.trim().length > 0 && password.length >= 6 && !isLoading;
-
-  const handleSignIn = async () => {
-    // Guarding here as well as disabling the button prevents accidental double
-    // submits from fast taps or keyboard submit events.
-    if (!canSubmit) {
-      return;
-    }
-
-    setIsLoading(true);
-    setMessage(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    setIsLoading(false);
-
-    if (error) {
-      setMessage(error.message);
-    }
-  };
-
-  const handleSignUp = async () => {
-    // Sign up uses the same email/password inputs but may require email
-    // confirmation depending on the Supabase project settings.
-    if (!canSubmit) {
-      return;
-    }
-
-    setIsLoading(true);
-    setMessage(null);
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-    });
-    setIsLoading(false);
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setMessage("Check your email if confirmation is enabled.");
-  };
+export function AuthScreen({ errorMessage, isSupabaseConfigured, onRetry }: AuthScreenProps) {
+  const setupMessage = isSupabaseConfigured
+    ? (errorMessage ??
+      "Anonymous auth is not ready. Check that it is enabled in Supabase Auth.")
+    : "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in mobile/.env.";
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.screen}
-    >
+    <View style={styles.screen}>
       <View style={styles.panel}>
         <Text style={styles.appName}>Battry</Text>
-        <Text style={styles.copy}>Sign in to keep your battery history tied to your account.</Text>
+        <Text style={styles.copy}>
+          Battry uses a private device identity. There is no account, email, or password.
+        </Text>
 
-        {!isSupabaseAuthConfigured ? (
-          <Text style={styles.error}>
-            Supabase auth env vars are missing. Set EXPO_PUBLIC_SUPABASE_URL and
-            EXPO_PUBLIC_SUPABASE_ANON_KEY.
-          </Text>
-        ) : null}
-
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="email"
-          placeholderTextColor="#8C8D86"
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="password"
-          placeholder="password"
-          placeholderTextColor="#8C8D86"
-          secureTextEntry
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        <Text style={styles.error}>{setupMessage}</Text>
 
         <TouchableOpacity
           accessibilityRole="button"
-          disabled={!canSubmit}
-          style={[styles.primaryButton, !canSubmit ? styles.disabledButton : null]}
-          onPress={handleSignIn}
+          disabled={!isSupabaseConfigured}
+          style={[styles.primaryButton, !isSupabaseConfigured ? styles.disabledButton : null]}
+          onPress={onRetry}
         >
-          <Text style={styles.primaryText}>{isLoading ? "Working" : "Sign in"}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          disabled={!canSubmit}
-          style={[styles.secondaryButton, !canSubmit ? styles.disabledSecondary : null]}
-          onPress={handleSignUp}
-        >
-          <Text style={styles.secondaryText}>Create account</Text>
+          <Text style={styles.primaryText}>Start private session</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -150,16 +60,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 8,
   },
-  input: {
-    backgroundColor: "#FAFAF7",
-    borderColor: "#DADBD2",
-    borderRadius: 8,
-    borderWidth: 1,
-    color: "#151515",
-    fontSize: 16,
-    marginTop: 12,
-    padding: 13,
-  },
   error: {
     backgroundColor: "#FFE8E2",
     borderColor: "#D9482F",
@@ -168,12 +68,6 @@ const styles = StyleSheet.create({
     color: "#8D210F",
     marginTop: 14,
     padding: 12,
-  },
-  message: {
-    color: "#4F514C",
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 12,
   },
   primaryButton: {
     alignItems: "center",
@@ -187,22 +81,6 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  secondaryButton: {
-    alignItems: "center",
-    borderColor: "#DADBD2",
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 10,
-    paddingVertical: 14,
-  },
-  disabledSecondary: {
-    opacity: 0.55,
-  },
-  secondaryText: {
-    color: "#151515",
     fontSize: 16,
     fontWeight: "800",
   },

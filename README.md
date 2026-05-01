@@ -18,7 +18,7 @@ It's not tryna to be a journal, habit tracker, or therapy tool. Right now it is 
 - Calculate `battery_before` and `battery_after`.
 - Keep logs in memory when no database is configured.
 - Store logs and parsed events in Supabase Postgres when `SUPABASE_DATABASE_URL` is set.
-- Sign in and sign up with Supabase Auth.
+- Create a private anonymous Supabase Auth session for each device.
 - Fetch recent logs for the signed-in user.
 - Build a basic weekly report with average/min/max battery, top drainer, top recharger, and a simple risk label.
 
@@ -130,7 +130,15 @@ Run the SQL migration in:
 supabase/migrations/202604260001_initial_battry_schema.sql
 ```
 
-Auth is wired through Supabase. The mobile app signs requests with a bearer token, and the backend derives the user from that token.
+Auth is wired through Supabase anonymous sign-in. The mobile app creates a private device session without asking for an email or password, signs requests with that bearer token, and the backend derives the randomized Supabase user UUID from the token.
+
+Anonymous sign-in must be enabled in the Supabase Auth settings for the mobile app to create private device identities.
+
+Before enabling it publicly:
+
+- Run `supabase/migrations/202605010001_harden_rls_for_anonymous_auth.sql`.
+- Keep Supabase anonymous sign-in rate limits conservative.
+- Keep backend API rate limiting enabled so one anonymous device cannot spam `/logs`.
 
 ## Mobile Setup
 
@@ -172,7 +180,7 @@ This is still pretty early and plain
 
 What needs to be done:
 
-- production-grade RLS policies
+- backend API rate limiting
 - vector parsing
 - ML forecasting
 - polished charts
